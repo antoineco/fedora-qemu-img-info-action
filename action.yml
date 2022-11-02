@@ -1,0 +1,58 @@
+name: Fedora QEMU image information
+description: Returns information about a Fedora QEMU disk image from Fedora's mirrors.
+author: Antoine Cotten (@antoineco)
+branding:
+  icon: info
+  color: blue
+inputs:
+  os:
+    description: Version code of the Fedora Linux release.
+    required: true
+  arch:
+    description: Machine architecture in the Linux format (e.g. "x86_64").
+      Defaults to the architecture of the current runner.
+outputs:
+  url:
+    description: URL of the Fedora QEMU disk image.
+    value: ${{ steps.image.outputs.url }}
+  sha256sum:
+    description: SHA256 checksum of the Fedora QEMU disk image.
+    value: ${{ steps.image.outputs.sha256sum }}
+  arch:
+    description: Machine architecture of the Fedora QEMU disk image.
+    value: ${{ steps.image.outputs.arch }}
+runs:
+  using: composite
+  steps:
+    - id: validate-input
+      shell: bash
+      run: |
+        echo '::group::Validate input parameters'
+        declare -i failed=0
+        if [[ ! ${{ inputs.os }} =~ ^f[0-9]{2}$ ]]; then
+          (( failed ++ ))
+          err="The provided 'os' parameter '${{ inputs.os }}' doesn't match the expected format"
+          echo "::error title=Invalid input::${err}"
+        fi
+        if (( failed )); then
+          exit 1
+        fi
+        echo 'Input OK'
+        echo '::endgroup::'
+    - id: image
+      shell: bash
+      run: |
+        echo '::group::Fetch QEMU image information'
+        declare img
+        img="$(${{ github.action_path }}/scripts/image_info.sh \
+          ${{ inputs.os }} \
+          ${{ inputs.arch }}
+        )"
+        declare img_url img_sha img_arch
+        img_url="$(jq -rnc  --argjson data "$img" '$data | .url')"
+        img_sha="$(jq -rnc  --argjson data "$img" '$data | .sha256sum')"
+        img_arch="$(jq -rnc --argjson data "$img" '$data | .arch')"
+        echo "url=${img_url}" >>"$GITHUB_OUTPUT"
+        echo "sha256sum=${img_sha}" >>"$GITHUB_OUTPUT"
+        echo "arch=${img_arch}" >>"$GITHUB_OUTPUT"
+        echo '::endgroup::'

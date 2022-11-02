@@ -1,0 +1,70 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions: {}
+
+jobs:
+
+  get-image:
+    name: Download a QEMU image
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [f36, f37, f38]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Get QEMU image info
+      id: image
+      uses: ./
+      with:
+        os: ${{ matrix.os }}
+
+    - name: Cache image
+      uses: actions/cache@v3
+      with:
+        path: ~/images
+        key: ${{ github.job }}-${{ runner.os }}-${{ matrix.os }}-${{ steps.image.outputs.sha256sum }}
+        restore-keys: ${{ github.job }}-${{ runner.os }}-${{ matrix.os }}-
+
+    - name: Check outputs
+      run: |
+        declare -i errors=0
+        declare url=${{ steps.image.outputs.url }}
+        if [[ -z "$url" ]]; then
+          echo '::error title=Missing output::No URL was returned'
+          (( failed ++ ))
+        fi
+        declare sha256sum=${{ steps.image.outputs.sha256sum }}
+        if [[ -z "$sha256sum" ]]; then
+          echo '::error title=Missing output::No checksum was returned'
+          (( failed ++ ))
+        fi
+        declare arch=${{ steps.image.outputs.arch }}
+        if [[ -z "$arch" ]]; then
+          echo '::error title=Missing output::No architecture was returned'
+          (( failed ++ ))
+        fi
+        if (( failed )); then
+          exit 1
+        fi
+
+    - name: Download image
+      run: |
+        if [[ -e ~/images/fedora.qcow2 ]]; then
+          echo '::notice title=Cache hit::The QEMU image is already cached'
+          exit 0
+        fi
+        mkdir -p ~/images
+        pushd >/dev/null ~/images
+        curl -o fedora.qcow2 ${{ steps.image.outputs.url }}
+        echo '${{ steps.image.outputs.sha256sum }}  fedora.qcow2' | sha256sum -c -
+        popd >/dev/null
