@@ -9,16 +9,18 @@ fedora::image::url() {
 	local os=$1
 	local arch=$2
 
-	local base_url
-	base_url="$(fedora::mirror "$os" "$arch")" || return
-	local imglist_url="$base_url"/imagelist-fedora
+	local os_version_id="${os#f}"
+	local os_codename="$os_version_id"
+	if (( os_version_id > 37 )); then
+		os_codename=rawhide
+	fi
 
-	os="${os#f}"
-	(( os > 37 )) && os=rawhide
+	local mirrorlist_url="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-${os_version_id}&arch=${arch}"
 
-	>&2 echo "::debug::Probing imagelist file at URL ${imglist_url}"
+	>&2 echo "::debug::Probing mirrorlist URL ${mirrorlist_url}"
 
-	local imgpath
+	local mirror_url=''
+	local imgpath=''
 
 	# read exits with a non-zero code if the last read input doesn't end
 	# with a newline character. The printf without newline that follows the
@@ -26,9 +28,11 @@ fedora::image::url() {
 	# exit code, but causes read to fail so we can capture the return value.
 	# Ref. https://unix.stackexchange.com/a/176703/152409
 	local line
-	local -i return
+	local -i return_outer
+	local -i return_inner
+	local -i imglist_code
 	local -i close_body=0
-	while IFS= read -r line || ! return="$line"; do
+	while IFS= read -r line || ! return_outer="$line"; do
 		if (( close_body )); then
 			# read the remaining response body to avoid printing
 			# harmless but misleading errors:
@@ -36,17 +40,51 @@ fedora::image::url() {
 			#   printf: write error: Broken pipe
 			continue
 		fi
-		>&2 echo "::debug::Evaluating line ${line}"
-		if [[ "$line" =~ (linux\/[a-z]+\/${os}\/Cloud\/${arch}\/images\/.+\.qcow2) ]]; then
-			>&2 echo "Found matching image ${line}"
-			imgpath="${BASH_REMATCH[1]}"
-			close_body=1
-		fi
-	done < <(curl -sSf "$imglist_url"; printf '%s' "$?")
 
-	if (( return )); then
-		>&2 echo "Failed to get the page ${imglist_url}"
-		return "$return"
+		>&2 echo "::debug::Evaluating line ${line}"
+		if [[ ! "$line" =~ ^(https?://.+/fedora) ]]; then
+			continue
+		fi
+
+		mirror_url="${BASH_REMATCH[1]}"
+
+		# Check whether mirror has imagelist file, otherwise it
+		# is not a valid candidate.
+		>&2 echo "::debug::Checking whether mirror has imagelist: ${mirror_url}"
+		imglist_code="$(curl -sSI -o /dev/null -w '%{http_code}' "$mirror_url"/imagelist-fedora)" || return
+		if (( imglist_code != 200 )); then
+			>&2 echo "Mirror is not serving imagelist, skipping: ${mirror_url}"
+			continue
+		fi
+
+		>&2 echo "::debug::Probing imagelist file at URL ${mirror_url}/imagelist-fedora"
+
+		while IFS= read -r line || ! return_inner="$line"; do
+			if (( close_body )); then
+				continue
+			fi
+			>&2 echo "::debug::Evaluating line ${line}"
+			if [[ "$line" =~ (linux\/[a-z]+\/${os_codename}\/Cloud\/${arch}\/images\/.+\.qcow2) ]]; then
+				imgpath="${BASH_REMATCH[1]}"
+				>&2 echo "Found matching image ${mirror_url}/${imgpath}"
+				close_body=1
+			fi
+		done < <(curl -sSf "$mirror_url"/imagelist-fedora; printf '%s' "$?")
+
+		if (( return_inner )); then
+			>&2 echo "Failed to get the page ${mirror_url}/imagelist-fedora"
+			return "$return_inner"
+		fi
+	done < <(curl -sSf "$mirrorlist_url"; printf '%s' "$?")
+
+	if (( return_outer )); then
+		>&2 echo "Failed to get the page ${mirrorlist_url}"
+		return "$return_outer"
+	fi
+
+	if [[ -z "$mirror_url" ]]; then
+		>&2 echo "Couldn't find a mirror for OS version '${os}' and architecture '${arch}'"
+		return 1
 	fi
 
 	if [[ -z "$imgpath" ]]; then
@@ -54,7 +92,7 @@ fedora::image::url() {
 		return 1
 	fi
 
-	echo "${base_url}/${imgpath}"
+	echo "${mirror_url}/${imgpath}"
 }
 
 # Returns the expected SHA256 checksum of a Fedora QEMU disk image.
@@ -119,58 +157,4 @@ fedora::image::sha256sum() {
 	fi
 
 	echo "$sha256sum"
-}
-
-# Returns the base URL of a suitable Fedora mirror.
-#
-# Arguments:
-#   OS version in the format f<version_id> (e.g. "f37")
-#   Machine architecture in the Linux format (e.g. "x86_64")
-# Outputs:
-#   Mirror base URL (e.g. "https://mirror.example.com/fedora")
-fedora::mirror() {
-	local os=$1
-	local arch=$2
-
-	local mirrorlist_url="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-${os#f}&arch=${arch}"
-
-	>&2 echo "::debug::Probing mirrorlist URL ${mirrorlist_url}"
-
-	local mirror_url
-
-	# See fedora::image::url for an explanation of this arcane error
-	# handling method.
-	local line
-	local -i return
-	local -i imglist_code
-	local -i close_body=0
-	while IFS= read -r line || ! return="$line"; do
-		if (( close_body )); then
-			continue
-		fi
-		>&2 echo "::debug::Evaluating line ${line}"
-		if [[ "$line" =~ ^(https?://.+/fedora) ]]; then
-			mirror_url="${BASH_REMATCH[1]}"
-			# Check whether mirror has imagelist file, otherwise it
-			# is not a valid candidate.
-			>&2 echo "::debug::Checking whether mirror has imagelist ${line}"
-			imglist_code="$(curl -sSI -o /dev/null -w '%{http_code}' "$mirror_url"/imagelist-fedora)" || return
-			if (( imglist_code == 200 )); then
-				>&2 echo "Found suitable mirror ${line}"
-				close_body=1
-			fi
-		fi
-	done < <(curl -sSf "$mirrorlist_url"; printf '%s' "$?")
-
-	if (( return )); then
-		>&2 echo "Failed to get the page ${mirrorlist_url}"
-		return "$return"
-	fi
-
-	if [[ -z "$mirror_url" ]]; then
-		>&2 echo "Couldn't find a mirror for OS version ${os} and architecture ${arch}"
-		return 1
-	fi
-
-	echo "$mirror_url"
 }
