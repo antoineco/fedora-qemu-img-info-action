@@ -49,7 +49,6 @@ jobs:
       with:
         path: ~/images
         key: ${{ github.job }}-${{ runner.os }}-${{ matrix.os }}-${{ steps.image.outputs.sha256sum }}
-        restore-keys: ${{ github.job }}-${{ runner.os }}-${{ matrix.os }}-
 
     - name: Download image
       run: |
