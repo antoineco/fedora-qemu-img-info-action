@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [f36, f37, f38]
+        os: [f36, f37, f38, f39]
 
     steps:
     - uses: actions/checkout@v3

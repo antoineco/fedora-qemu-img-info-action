@@ -35,7 +35,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [f36, f37, f38]
+        os: [f36, f37, f38, f39]
 
     steps:
     - name: Get QEMU image info
