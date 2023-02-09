@@ -1,7 +1,7 @@
 # Returns the URL of a Fedora QEMU disk image.
 #
 # Arguments:
-#   OS version in the format f<version_id> (e.g. "f37")
+#   OS version in the format f<version_id> (e.g. "f38")
 #   Machine architecture in the Linux format (e.g. "x86_64")
 # Outputs:
 #   Image URL
@@ -11,7 +11,7 @@ fedora::image::url() {
 
 	local os_version_id="${os#f}"
 	local os_codename="$os_version_id"
-	if (( os_version_id > 37 )); then
+	if (( os_version_id > 38 )); then
 		os_codename=rawhide
 	fi
 
