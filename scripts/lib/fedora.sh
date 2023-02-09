@@ -15,7 +15,7 @@ fedora::image::url() {
 		os_codename=rawhide
 	fi
 
-	local mirrorlist_url="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-${os_version_id}&arch=${arch}"
+	local mirrorlist_url="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-${os_codename}&arch=${arch}"
 
 	>&2 echo "::debug::Probing mirrorlist URL ${mirrorlist_url}"
 
