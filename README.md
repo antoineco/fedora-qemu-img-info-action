@@ -18,7 +18,7 @@ Action][kdev].
 ### Outputs
 
 - `url`: URL of the Fedora QEMU disk image (e.g.
-  "https://<area>mirror.example.com/fedora/linux/releases/37/Cloud/x86_64/images/fedora.qcow2").
+  "https://<area>mirror.example.com/fedora/linux/releases/38/Cloud/x86_64/images/fedora.qcow2").
 - `sha256sum`: SHA256 checksum of the Fedora QEMU disk image.
 - `arch`: Machine architecture of the Fedora QEMU disk image.
 
