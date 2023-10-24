@@ -11,7 +11,7 @@ fedora::image::url() {
 
 	local os_version_id="${os#f}"
 	local os_codename="$os_version_id"
-	if (( os_version_id > 38 )); then
+	if (( os_version_id > 39 )); then
 		os_codename=rawhide
 	fi
 
@@ -114,7 +114,7 @@ fedora::image::sha256sum() {
 		if [[ "$url" =~ \/releases\/ ]]; then
 			checksum_url="${base}/Fedora-Cloud-${os}-${id}-${arch}-CHECKSUM"
 		else
-			checksum_url="${base}/Fedora-Cloud-${os}-${arch}-${id}-CHECKSUM"
+			checksum_url="${base}/Fedora-Cloud-images-${os}-${arch}-${id}-CHECKSUM"
 		fi
 	fi
 
